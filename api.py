@@ -8,13 +8,20 @@ from google.appengine.api import memcache, taskqueue
 from google.appengine.ext import ndb
 
 from models import Player, PlayerForm, PlayerUpdateForm
-#from models import StringMessage, NewGameForm, GameForm
+from models import Game, NewGameForm, GameForm
+from models import StringMessage
 from utils import get_by_urlsafe
 from utils2 import getUserId
 
 from settings import WEB_CLIENT_ID
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
+
+
+GAME_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage, websafeKey=messages.StringField(1),
+)
+
 
 @endpoints.api( name='concentration',
                 version='v1',
@@ -67,6 +74,8 @@ class ConcentrationApi(remote.Service):
                 key = p_key,
                 displayName = user.nickname(), 
                 mainEmail= user.email(),
+                gamesPlayed = 0,
+                totalMoves = 0,
             )
             player.put()
             
@@ -87,6 +96,7 @@ class ConcentrationApi(remote.Service):
         # return ProfileForm
         return self._copyPlayerToForm(player)
 
+    ## USER METHODS
 
     @endpoints.method(message_types.VoidMessage, PlayerForm,
             path='get_player', http_method='GET', name='getPlayer')
@@ -100,6 +110,71 @@ class ConcentrationApi(remote.Service):
     def saveProfile(self, request):
         """Update & return player information"""
         return self._doPlayer(request)
+
+    ## GAME METHODS
+
+    def _sendGameToForm(self, game, player):
+        """Display the current state of a game"""
+        gf = GameForm()
+        for field in gf.all_fields():
+            if hasattr(game, field.name):
+                setattr(gf, field.name, getattr(game, field.name))
+            #elif field.name == "websafeKey":
+            #    setattr(gf, field.name, game.key.urlsafe())
+        if player:
+            setattr(gf, 'user_name', player.displayName)
+        gf.check_initialized()
+        return gf
+
+    def _createGame(self, request):
+        """Create a new game"""
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization Required')
+        user_id = getUserId(user)
+
+        ## Set the player as the parent for the Game
+        # get player key
+        p_key = ndb.Key(Player, user_id)
+
+        # create a new game id with the player id as the parent
+        g_id = Game.allocate_ids(size=1, parent=p_key)[0]
+        # make the game key
+        g_key = ndb.Key(Game, g_id, parent=p_key)
+
+        # Copy information from the new game form and create Game instance
+        cards = getattr(request, 'cards')
+        newGame = {}
+
+        newGame['cards'] = cards
+        newGame['key'] = g_key
+        newGame['playerId'] = user_id
+
+        thisGame = Game.new_game(**newGame)
+        thisGame.put()
+
+        player = p_key.get()
+        return self._sendGameToForm(thisGame, player)
+
+
+
+    @endpoints.method(GAME_GET_REQUEST, GameForm,
+            path='game/show/{websafeKey}', http_method='GET', name='showGame')
+    def showGame(self, request):
+        """Return the board state for the specified game"""
+        game = ndb.Key(urlsafe=request.websafeKey)
+        if not game:
+            raise endpoints.NotFoundException(
+                'No game found with key: %s' % request.websafeKey)
+        player = game.key.parent().get()
+        return self._sendGameToForm(game, player)
+
+
+    @endpoints.method(NewGameForm, GameForm,
+            path='game/new', http_method='POST', name='newGame')
+    def newGame(self, request):
+        """Create a new game"""
+        return self._createGame(request)
 
 
 api = endpoints.api_server([ConcentrationApi])

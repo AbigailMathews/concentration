@@ -1,5 +1,4 @@
 import pydealer as pd
-import pydealer.utils as pdutils
 
 
 
@@ -10,16 +9,16 @@ def constructBoard(numCards=52, abbrev=True):
     deck = pd.Deck()
     ## Split the deck using the initial set of cards if numCards < 52
     if numCards < 52:
-        deck = splitDeck(deck, 52)
+        deck = splitDeck(deck, numCards)
         
     deck.shuffle(times=5)
 
     board = []
-    for card in deck:
+    for c in deck:
         if abbrev:
-            board.append(pd.card.card_abbrev(deck[0].value, deck[0].suit))
+            board.append(pd.card.card_abbrev(c.value, c.suit))
         else:
-            board.append(pd.card.card_name(deck[0].value, deck[0].suit))
+            board.append(pd.card.card_name(c.value, c.suit))
     return board
 
 
@@ -27,7 +26,7 @@ def initialBoardState(numCards=52):
     """Create a board that can display the current state of the game, i.e.
     whether any given card has been correctly matched yet, or not"""
     displayBoard = []
-    for n in numCards:
+    for n in range(0, numCards):
         displayBoard.append('U')
     return displayBoard
 

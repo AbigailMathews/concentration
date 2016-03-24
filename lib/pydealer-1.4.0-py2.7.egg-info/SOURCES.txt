@@ -1,0 +1,17 @@
+CHANGES.rst
+LICENSE.txt
+MANIFEST.in
+README.rst
+setup.cfg
+setup.py
+pydealer/__init__.py
+pydealer/card.py
+pydealer/const.py
+pydealer/deck.py
+pydealer/stack.py
+pydealer/tools.py
+pydealer.egg-info/PKG-INFO
+pydealer.egg-info/SOURCES.txt
+pydealer.egg-info/dependency_links.txt
+pydealer.egg-info/not-zip-safe
+pydealer.egg-info/top_level.txt
