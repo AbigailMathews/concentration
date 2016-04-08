@@ -31,6 +31,7 @@ class PlayerUpdateForm(messages.Message):
 	displayName = messages.StringField(1)
 
 
+
 ### Game Related Classes and Messages
 
 class Game(ndb.Model):
@@ -76,8 +77,8 @@ class Game(ndb.Model):
 class GameForm(messages.Message):
     """GameForm for outbound game state information"""
     urlsafe_key = messages.StringField(1)
-    guesses = messages.IntegerField(2, required=True)
-    game_over = messages.BooleanField(3, required=True)
+    guesses = messages.IntegerField(2)
+    game_over = messages.BooleanField(3)
     message = messages.StringField(4)
     boardState = messages.StringField(5, repeated=True)
     user_name = messages.StringField(6)
@@ -88,6 +89,17 @@ class GameForm(messages.Message):
 class NewGameForm(messages.Message):
     """Used to create a new game"""
     cards = messages.IntegerField(1, default=52)
+
+
+class FlipCardForm(messages.Message):
+    """Form to allow players to guess a card by supplying its index"""
+    flippedCard = messages.IntegerField(1)
+    board = messages.StringField(2, repeated=True)
+
+
+class CardForm(messages.Message):
+    """Form to respond to player guess by revealing a card value"""
+    cardValue = messages.StringField(1)
 
 
 ### Assorted Message Classes

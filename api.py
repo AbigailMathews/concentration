@@ -9,6 +9,7 @@ from google.appengine.ext import ndb
 
 from models import Player, PlayerForm, PlayerUpdateForm
 from models import Game, NewGameForm, GameForm
+from models import FlipCardForm, CardForm
 from models import StringMessage
 from utils import get_by_urlsafe
 from utils2 import getUserId
@@ -16,6 +17,8 @@ from utils2 import getUserId
 from settings import WEB_CLIENT_ID
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
+
+import game as gm
 
 
 GAME_GET_REQUEST = endpoints.ResourceContainer(
@@ -96,6 +99,7 @@ class ConcentrationApi(remote.Service):
         # return ProfileForm
         return self._copyPlayerToForm(player)
 
+
     ## USER METHODS
 
     @endpoints.method(message_types.VoidMessage, PlayerForm,
@@ -110,6 +114,7 @@ class ConcentrationApi(remote.Service):
     def saveProfile(self, request):
         """Update & return player information"""
         return self._doPlayer(request)
+
 
     ## GAME METHODS
 
@@ -156,6 +161,11 @@ class ConcentrationApi(remote.Service):
         player = p_key.get()
         return self._sendGameToForm(thisGame, player)
 
+    def _showCard(self, request):
+        """Flip a card over and reveal it's value"""
+        guessedCard = getattr(request, 'flippedCard')
+        board = getattr(request, 'board')
+        return gm.turnCard(guessedCard, board)
 
 
     @endpoints.method(GAME_GET_REQUEST, GameForm,
@@ -166,7 +176,7 @@ class ConcentrationApi(remote.Service):
         if not game:
             raise endpoints.NotFoundException(
                 'No game found with key: %s' % request.websafeKey)
-        player = game.key.parent().get()
+        player = game.parent().get()
         return self._sendGameToForm(game, player)
 
 
@@ -176,5 +186,10 @@ class ConcentrationApi(remote.Service):
         """Create a new game"""
         return self._createGame(request)
 
+    @endpoints.method(FlipCardForm, CardForm,
+            path='game/flip', http_method='POST', name='flipCard')
+    def flipCard(self, request):
+        """Responds to a guessed card by revealing a card's value"""
+        return self._showCard(request)
 
 api = endpoints.api_server([ConcentrationApi])
