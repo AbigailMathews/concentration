@@ -10,26 +10,10 @@ import game as gm
 
 ### User Related Classes and Messages
 
-class Player(ndb.Model):
-    """Player object"""
-    displayName = ndb.StringProperty()
-    mainEmail = ndb.StringProperty()
-    gamesPlayed = ndb.IntegerProperty()
-    totalMoves = ndb.IntegerProperty()
-
-
-class PlayerForm(messages.Message):
-    """ProfileForm -- Profile outbound form message"""
-    displayName = messages.StringField(1)
-    mainEmail = messages.StringField(2)
-    gamesPlayed = messages.IntegerField(3)
-    totalMoves = messages.IntegerField(4)
-
-
-class PlayerUpdateForm(messages.Message):
-	"""Form to allow users to change their display name"""
-	displayName = messages.StringField(1)
-
+class User(ndb.Model):
+    """User profile"""
+    name = ndb.StringProperty(required=True)
+    email =ndb.StringProperty()
 
 
 ### Game Related Classes and Messages
@@ -41,11 +25,10 @@ class Game(ndb.Model):
     guesses = ndb.IntegerProperty(required=True, default=0)
     cards = ndb.IntegerProperty(required=True, default=52)
     game_over = ndb.BooleanProperty(required=True, default=False)
-    playerId = ndb.StringProperty()
-    websafeKey = ndb.KeyProperty()
+    user = ndb.KeyProperty(required=True, kind='User')
 
     @classmethod
-    def new_game(self, playerId, key, cards=52):
+    def new_game(self, user, cards=52):
         """Creates and returns a new game"""
         if cards < 8 or cards > 52 or cards % 2 != 0:
             raise ValueError('Cards dealt must be an even number between 8 and 52')
@@ -54,8 +37,7 @@ class Game(ndb.Model):
                     guesses=0,
                     cards=cards,
                     game_over=False,
-                    playerId=playerId,
-                    websafeKey=key,
+                    user=user
                     )
         newGame.put()
         return newGame
@@ -73,6 +55,27 @@ class Game(ndb.Model):
         form.board = self.board
         return form
 
+    def end_game(self):
+        #self.game_over = True
+        #self.put()
+        # Add the game to the score 'board'
+        score = Score(user=self.user, date=date.today(), cards=self.cards, guesses=self.guesses)
+        score.put()
+
+
+class Score(ndb.Model):
+    """Score object"""
+    user = ndb.KeyProperty(required=True, kind='User')
+    date = ndb.DateProperty(required=True)
+    cards = ndb.IntegerProperty(required=True)
+    guesses = ndb.IntegerProperty(required=True)
+
+    def to_form(self):
+        return ScoreForm(user_name=self.user.get().name,
+                         date=str(self.date), 
+                         cards=self.cards,
+                         guesses=self.guesses)
+
 
 class GameForm(messages.Message):
     """GameForm for outbound game state information"""
@@ -88,18 +91,41 @@ class GameForm(messages.Message):
 
 class NewGameForm(messages.Message):
     """Used to create a new game"""
-    cards = messages.IntegerField(1, default=52)
+    user_name = messages.StringField(1, required=True)
+    cards = messages.IntegerField(2, default=52)
 
+
+## Guess Message Classes
 
 class FlipCardForm(messages.Message):
     """Form to allow players to guess a card by supplying its index"""
     flippedCard = messages.IntegerField(1)
-    board = messages.StringField(2, repeated=True)
 
 
 class CardForm(messages.Message):
     """Form to respond to player guess by revealing a card value"""
     cardValue = messages.StringField(1)
+
+
+class MakeGuessForm(messages.Message):
+    """Used to make a move in an existing game"""
+    card1 = messages.IntegerField(1, required=True)
+    card2 = messages.IntegerField(2, required=True)
+
+
+## Score Message Classes
+
+class ScoreForm(messages.Message):
+    """ScoreForm for outbound Score information"""
+    user_name = messages.StringField(1, required=True)
+    date = messages.StringField(2, required=True)
+    cards = messages.IntegerField(3, required=True)
+    guesses = messages.IntegerField(4, required=True)
+
+
+class ScoreForms(messages.Message):
+    """Return multiple ScoreForms"""
+    items = messages.MessageField(ScoreForm, 1, repeated=True)
 
 
 ### Assorted Message Classes

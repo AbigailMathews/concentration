@@ -45,13 +45,21 @@ def splitDeck(deck, numCards):
 
 def turnCard(indexValue, myBoard):
     cardname = myBoard[indexValue]
-    cardvalue = cardname[0]
-    print(cardname)
-    return cardvalue
+    return cardname
 
 
 def compareCards(index1, index2, myBoard, displayBoard):
-    pass
+    card1 = myBoard[index1]
+    card2 = myBoard[index2]
+    message = "The first card had value {}. ".format(card1)
+    message += "The second card had value {}. ".format(card2)
+    if card1[0] == card2[0]:
+        message += "It's a match!"
+        displayBoard[index1] = 'M'
+        displayBoard[index2] = 'M'
+    else:
+        message += "Sorry, no match this time. Guess again."
+    return message, displayBoard
 
 
 def playGame():

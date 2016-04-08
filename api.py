@@ -7,25 +7,39 @@ from protorpc import remote, messages, message_types
 from google.appengine.api import memcache, taskqueue
 from google.appengine.ext import ndb
 
-from models import Player, PlayerForm, PlayerUpdateForm
+from models import User
 from models import Game, NewGameForm, GameForm
-from models import FlipCardForm, CardForm
+from models import FlipCardForm, CardForm, MakeGuessForm
 from models import StringMessage
 from utils import get_by_urlsafe
-from utils2 import getUserId
 
 from settings import WEB_CLIENT_ID
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 
+# Game Logic
 import game as gm
 
 
-GAME_GET_REQUEST = endpoints.ResourceContainer(
-    message_types.VoidMessage, websafeKey=messages.StringField(1),
-)
+NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
+
+GET_GAME_REQUEST = endpoints.ResourceContainer(
+        urlsafe_game_key=messages.StringField(1),)
+
+FLIP_CARD_REQUEST = endpoints.ResourceContainer(
+        FlipCardForm, 
+        urlsafe_game_key=messages.StringField(1),)
+
+MAKE_MOVE_REQUEST = endpoints.ResourceContainer(
+        MakeGuessForm,
+        urlsafe_game_key=messages.StringField(1),)
+
+USER_REQUEST = endpoints.ResourceContainer(
+        user_name=messages.StringField(1),
+        email=messages.StringField(2))
 
 
+### ### CONCENTRATION API ### ###
 @endpoints.api( name='concentration',
                 version='v1',
                 allowed_client_ids=[WEB_CLIENT_ID, API_EXPLORER_CLIENT_ID],
@@ -33,163 +47,91 @@ GAME_GET_REQUEST = endpoints.ResourceContainer(
 class ConcentrationApi(remote.Service):
     """Concentration Game API v0.1"""
 
-# - - - User handling
-#    @endpoints.method(request_message=USER_REQUEST,
-#                      response_message=StringMessage,
-#                      path='user',
-#                      name='create_user',
-#                      http_method='POST')
-#    def create_player(self, request):
-#        """Create a User"""
-#        if User.query(User.name == request.user_name).get():
-#            raise endpoints.ConflictException(
-#                    'A User with that name already exists!')
-#        user = User(name=request.user_name, email=request.email)
-#        user.put()
-#        return StringMessage(message='User {} created!'.format(
-#                request.user_name))
+    @endpoints.method(request_message=USER_REQUEST,
+                      response_message=StringMessage,
+                      path='user',
+                      name='create_user',
+                      http_method='POST')
+    def create_user(self, request):
+        """Create a User. Requires a unique username"""
+        if User.query(User.name == request.user_name).get():
+            raise endpoints.ConflictException(
+                    'A User with that name already exists!')
+        user = User(name=request.user_name, email=request.email)
+        user.put()
+        return StringMessage(message='User {} created!'.format(
+                request.user_name))
 
-
-    def _copyPlayerToForm(self, player):
-        """Copy relevant fields from Player to its Form."""
-        pf = PlayerForm()
-        for field in pf.all_fields():
-            if hasattr(player, field.name):
-                setattr(pf, field.name, getattr(player, field.name))
-        pf.check_initialized()
-        return pf
-
-
-    def _getPlayerFromUser(self):
-        """Return Player from datastore, creating new Player if non-existent."""
-        ## Use Oauth to authorize the user
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
-        
-        user_id = getUserId(user)
-        p_key = ndb.Key(Player, user_id)
-        
-        player = p_key.get()
-
-        if not player:
-            player = Player(
-                key = p_key,
-                displayName = user.nickname(), 
-                mainEmail= user.email(),
-                gamesPlayed = 0,
-                totalMoves = 0,
-            )
-            player.put()
-            
-        return player     # return Profile
-
-
-    def _doPlayer(self, save_request=None):
-        """Return Player, possibly updating it first."""
-        # get user Profile
-        player = self._getPlayerFromUser()
-
-        # if saveProfile(), process user-modifiable fields
-        if save_request:
-            val = getattr(save_request, 'displayName')
-            if val:
-                setattr(player, 'displayName', str(val))
-            player.put()
-        # return ProfileForm
-        return self._copyPlayerToForm(player)
-
-
-    ## USER METHODS
-
-    @endpoints.method(message_types.VoidMessage, PlayerForm,
-            path='get_player', http_method='GET', name='getPlayer')
-    def getPlayer(self, request):
-        """Return Player information"""
-        return self._doPlayer()
-
-
-    @endpoints.method(PlayerUpdateForm, PlayerForm,
-            path='update_player', http_method='POST', name='updatePlayer')
-    def saveProfile(self, request):
-        """Update & return player information"""
-        return self._doPlayer(request)
 
 
     ## GAME METHODS
 
-    def _sendGameToForm(self, game, player):
-        """Display the current state of a game"""
-        gf = GameForm()
-        for field in gf.all_fields():
-            if hasattr(game, field.name):
-                setattr(gf, field.name, getattr(game, field.name))
-            #elif field.name == "websafeKey":
-            #    setattr(gf, field.name, game.key.urlsafe())
-        if player:
-            setattr(gf, 'user_name', player.displayName)
-        gf.check_initialized()
-        return gf
-
-    def _createGame(self, request):
-        """Create a new game"""
-        user = endpoints.get_current_user()
+    @endpoints.method(request_message=NEW_GAME_REQUEST,
+                      response_message=GameForm,
+                      path='game',
+                      name='new_game',
+                      http_method='POST')
+    def new_game(self, request):
+        """Creates new game"""
+        user = User.query(User.name == request.user_name).get()
         if not user:
-            raise endpoints.UnauthorizedException('Authorization Required')
-        user_id = getUserId(user)
-
-        ## Set the player as the parent for the Game
-        # get player key
-        p_key = ndb.Key(Player, user_id)
-
-        # create a new game id with the player id as the parent
-        g_id = Game.allocate_ids(size=1, parent=p_key)[0]
-        # make the game key
-        g_key = ndb.Key(Game, g_id, parent=p_key)
-
-        # Copy information from the new game form and create Game instance
-        cards = getattr(request, 'cards')
-        newGame = {}
-
-        newGame['cards'] = cards
-        newGame['key'] = g_key
-        newGame['playerId'] = user_id
-
-        thisGame = Game.new_game(**newGame)
-        thisGame.put()
-
-        player = p_key.get()
-        return self._sendGameToForm(thisGame, player)
-
-    def _showCard(self, request):
-        """Flip a card over and reveal it's value"""
-        guessedCard = getattr(request, 'flippedCard')
-        board = getattr(request, 'board')
-        return gm.turnCard(guessedCard, board)
+            raise endpoints.NotFoundException(
+                    'A User with that name does not exist!')
+        try:
+            game = Game.new_game(user.key, request.cards)
+        except:
+            raise endpoints.BadRequestException('Request Failed')
+        return game.to_form('Let the Guessing Begin!')
 
 
-    @endpoints.method(GAME_GET_REQUEST, GameForm,
-            path='game/show/{websafeKey}', http_method='GET', name='showGame')
+    @endpoints.method(request_message=GET_GAME_REQUEST, response_message=GameForm,
+            path='game/{urlsafe_game_key}', http_method='GET', name='showGame')
     def showGame(self, request):
         """Return the board state for the specified game"""
-        game = ndb.Key(urlsafe=request.websafeKey)
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:
-            raise endpoints.NotFoundException(
-                'No game found with key: %s' % request.websafeKey)
-        player = game.parent().get()
-        return self._sendGameToForm(game, player)
+            raise endpoints.NotFoundException('No game found!')
+        else:
+            return game.to_form('Make your move!')
 
 
-    @endpoints.method(NewGameForm, GameForm,
-            path='game/new', http_method='POST', name='newGame')
-    def newGame(self, request):
-        """Create a new game"""
-        return self._createGame(request)
+    ## GAME METHODS -- CARD ACTIONS
 
-    @endpoints.method(FlipCardForm, CardForm,
-            path='game/flip', http_method='POST', name='flipCard')
+
+    @endpoints.method(FLIP_CARD_REQUEST, CardForm,
+            path='game/{urlsafe_game_key}/flip', http_method='POST', name='flipCard')
     def flipCard(self, request):
         """Responds to a guessed card by revealing a card's value"""
-        return self._showCard(request)
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        if not game:
+            raise endpoints.NotFoundException('No game found!')
+        else:
+            board = game.board
+            guessedCard = getattr(request, 'flippedCard')
+            result = gm.turnCard(guessedCard, board)
+            return CardForm(cardValue=result)
+
+    @endpoints.method(MAKE_MOVE_REQUEST, GameForm,
+            path='game/{urlsafe_game_key}/move', http_method='POST', name='makeMove')
+    def makeMove(self, request):
+        """Accepts two cards and reveals whether they match"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        if not game:
+            raise endpoints.NotFoundException('No game found!')
+        else:
+            board = game.board
+            displayBoard = game.boardState
+            card1 = getattr(request, 'card1')
+            card2 = getattr(request, 'card2')
+            if card1 == card2:
+                # The user is guessing the same card twice
+                raise endpoints.BadRequestException("You can't pick the same card twice!")
+            else:
+                message, resultBoard = gm.compareCards(card1, card2, board, displayBoard)
+                game.guesses += 1
+                game.boardState = resultBoard
+                game.put()
+                return game.to_form(message=message)
+
 
 api = endpoints.api_server([ConcentrationApi])
