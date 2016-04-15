@@ -47,6 +47,9 @@ USER_REQUEST = endpoints.ResourceContainer(
 class ConcentrationApi(remote.Service):
     """Concentration Game API v0.1"""
 
+
+    ## USER METHODS
+
     @endpoints.method(request_message=USER_REQUEST,
                       response_message=StringMessage,
                       path='user',
@@ -63,8 +66,23 @@ class ConcentrationApi(remote.Service):
                 request.user_name))
 
 
+#    @endpoints.method(request_message=USER_GAME_REQUEST,
+#                      response_message=UserGameForm,
+#                      path='user/current',
+#                      name='get_user_games',
+#                      http_method='GET')
+#    def get_user_games(self, request):
+#        """Return a list of all of a User's active games"""
 
     ## GAME METHODS
+
+#    @endpoints.method(request_message=StringMessage,
+#                      response_message=StringMessage,
+#                      path='game/{rulsafe_game_key}/cancel',
+#                      name='cancel_game',
+#                      http_method=POST)
+#    def cancel_game(self, request):
+#        """Cancel and in-progress (but not completed) game"""
 
     @endpoints.method(request_message=NEW_GAME_REQUEST,
                       response_message=GameForm,
@@ -93,6 +111,15 @@ class ConcentrationApi(remote.Service):
             raise endpoints.NotFoundException('No game found!')
         else:
             return game.to_form('Make your move!')
+
+
+#    @endpoints.method(request_message=message_types.VoidMessage,
+#                      response_message=GameHistoryForm,
+#                      path='game/{urlsafe_game_key}/history',
+#                      name='get_game_history',
+#                      http_method='GET')
+#    def get_game_history(self, request):
+#        """Show the history of moves for a game"""
 
 
     ## GAME METHODS -- CARD ACTIONS
@@ -132,6 +159,50 @@ class ConcentrationApi(remote.Service):
                 game.boardState = resultBoard
                 game.put()
                 return game.to_form(message=message)
+
+
+    ## SCORE METHODS
+
+#    @endpoints.method(response_message=ScoreForms,
+#                      path='scores',
+#                      name='get_scores',
+#                      http_method='GET')
+#    def get_scores(self, request):
+#        """Return all scores"""
+#        return ScoreForms(items=[score.to_form() for score in Score.query()])
+
+
+#    @endpoints.method(request_message=USER_REQUEST,
+#                      response_message=ScoreForms,
+#                      path='scores/user/{user_name}',
+#                      name='get_user_scores',
+#                      http_method='GET')
+#    def get_user_scores(self, request):
+#        """Returns all of an individual User's scores"""
+#        user = User.query(User.name == request.user_name).get()
+#        if not user:
+#            raise endpoints.NotFoundException(
+#                    'A User with that name does not exist!')
+#        scores = Score.query(Score.user == user.key)
+#        return ScoreForms(items=[score.to_form() for score in scores])
+
+
+#    @endpoints.method(request_message=message_types.VoidMessage,
+#                      response_message=ScoreForm,
+#                      path='scores/high_scores',
+#                      name='get_high_scores',
+#                      http_method='GET')
+#    def cancel_game(self, request):
+#        """Generate a list of high scores"""
+
+
+#    @endpoints.method(request_message=message_types.VoidMessage,
+#                      response_message=UserRankForm,
+#                      path='users/rankings',
+#                      name='get_user_rankings',
+#                      http_method='GET')
+#    def get_user_rankings(self, request):
+#        """Return a player's performance statistics"""
 
 
 api = endpoints.api_server([ConcentrationApi])
