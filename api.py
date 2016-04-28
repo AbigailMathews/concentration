@@ -7,7 +7,7 @@ from protorpc import remote, messages, message_types
 from google.appengine.api import memcache, taskqueue
 from google.appengine.ext import ndb
 
-from models import User
+from models import User, UserForm
 from models import Game, NewGameForm, GameForm
 from models import MiniGameForm, MiniGameForms
 from models import FlipCardForm, CardForm, MakeGuessForm
@@ -39,7 +39,7 @@ USER_REQUEST = endpoints.ResourceContainer(
         user_name=messages.StringField(1),
         email=messages.StringField(2))
 
-USER_GAME_REQUEST = endpoints.ResourceContainer(
+USER_INFO_REQUEST = endpoints.ResourceContainer(
         user_name=messages.StringField(1))
 
 
@@ -70,7 +70,21 @@ class ConcentrationApi(remote.Service):
                 request.user_name))
 
 
-    @endpoints.method(request_message=USER_GAME_REQUEST,
+    @endpoints.method(request_message=USER_INFO_REQUEST,
+                      response_message=UserForm,
+                      path='user/info',
+                      name='user_info',
+                      http_method='GET')
+    def user_info(self, request):
+        """Get stats about a user"""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException('No such user.')
+        else:
+            return user.to_form()
+
+
+    @endpoints.method(request_message=USER_INFO_REQUEST,
                       response_message=MiniGameForms,
                       path='user/current',
                       name='get_user_games',
@@ -95,16 +109,19 @@ class ConcentrationApi(remote.Service):
                       response_message=StringMessage,
                       path='game/{urlsafe_game_key}/cancel',
                       name='cancel_game',
-                      http_method='POST')
+                      http_method='PUT')
     def cancel_game(self, request):
         """Cancel and in-progress (but not completed) game"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:
             raise endpoints.NotFoundException("Can't cancel! Game doesn't exist!")
-        elif game.game_over:
-            raise endpoints.BadRequestException("Can't cancel a completed game!")
+        elif game.status == 'Won':
+            raise endpoints.BadRequestException("Can't cancel a game that's been won!")
+        elif game.status == 'Canceled':
+            raise endpoints.BadRequestException("You've already cancelled that game.")
         else:
-            game.delete()
+            game.status = 'Canceled'
+            game.put()
             return StringMessage(message='Game canceled.')
 
 

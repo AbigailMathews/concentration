@@ -13,7 +13,19 @@ import game as gm
 class User(ndb.Model):
     """User profile"""
     name = ndb.StringProperty(required=True)
-    email =ndb.StringProperty()
+    email = ndb.StringProperty()
+    total_games = ndb.FloatProperty(default=.1)
+    total_score = ndb.FloatProperty(default=.1)
+    avg_score = ndb.ComputedProperty(lambda self: self.total_score/self.total_games)
+
+    @classmethod
+    def to_form(self):
+        form = UserForm()
+        form.name = self.name
+        form.total_games = round(self.total_games)
+        form.total_score = round(self.total_score)
+        form.avg_score = round(self.avg_score)
+        return form
 
 
 ### Game Related Classes and Messages
@@ -24,7 +36,7 @@ class Game(ndb.Model):
     boardState = ndb.StringProperty(repeated=True)
     guesses = ndb.IntegerProperty(required=True, default=0)
     cards = ndb.IntegerProperty(required=True, default=52)
-    game_over = ndb.BooleanProperty(required=True, default=False)
+    status = ndb.StringProperty(required=True, default='In Progress')
     user = ndb.KeyProperty(required=True, kind='User')
 
     @classmethod
@@ -36,7 +48,7 @@ class Game(ndb.Model):
                     boardState=gm.initialBoardState(cards),
                     guesses=0,
                     cards=cards,
-                    game_over=False,
+                    status='In Progress',
                     user=user
                     )
         newGame.put()
@@ -49,7 +61,7 @@ class Game(ndb.Model):
         form.user_name = self.user.get().name
         form.guesses = self.guesses
         form.cards = self.cards
-        form.game_over = self.game_over
+        form.status = self.status
         form.message = message
         form.boardState = self.boardState
         form.board = self.board
@@ -61,13 +73,16 @@ class Game(ndb.Model):
         form.urlsafe_key = self.key.urlsafe()
         form.guesses = self.guesses
         form.cards = self.cards
+        form.status = self.status
         return form
 
     def end_game(self):
-        #self.game_over = True
-        #self.put()
+        self.status = 'Won'
+        self.put()
         # Add the game to the score 'board'
-        score = Score(user=self.user, date=date.today(), cards=self.cards, guesses=self.guesses)
+        total_score = round((self.cards ** 4) / self.guesses)
+        score = Score(user=self.user, date=date.today(), cards=self.cards, 
+                      guesses=self.guesses, score=total_score)
         score.put()
 
 
@@ -77,19 +92,21 @@ class Score(ndb.Model):
     date = ndb.DateProperty(required=True)
     cards = ndb.IntegerProperty(required=True)
     guesses = ndb.IntegerProperty(required=True)
+    score = ndb.IntegerProperty(required=True)
 
     def to_form(self):
         return ScoreForm(user_name=self.user.get().name,
                          date=str(self.date), 
                          cards=self.cards,
-                         guesses=self.guesses)
+                         guesses=self.guesses,
+                         score=self.score)
 
 
 class GameForm(messages.Message):
     """GameForm for outbound game state information"""
     urlsafe_key = messages.StringField(1)
     guesses = messages.IntegerField(2)
-    game_over = messages.BooleanField(3)
+    status = messages.StringField(3)
     message = messages.StringField(4)
     boardState = messages.StringField(5, repeated=True)
     user_name = messages.StringField(6)
@@ -102,6 +119,7 @@ class MiniGameForm(messages.Message):
     urlsafe_key = messages.StringField(1)
     guesses = messages.IntegerField(2)
     cards = messages.IntegerField(3)
+    status = messages.StringField(4)
 
 
 class MiniGameForms(messages.Message):
@@ -146,6 +164,16 @@ class ScoreForm(messages.Message):
 class ScoreForms(messages.Message):
     """Return multiple ScoreForms"""
     items = messages.MessageField(ScoreForm, 1, repeated=True)
+
+
+## User and Rankings Message Classes
+
+class UserForm(messages.Message):
+    """User detail form"""
+    name = messages.StringField(1)
+    total_games = messages.IntegerField(2)
+    total_score = messages.IntegerField(3)
+    avg_score = messages.IntegerField(4)
 
 
 ### Assorted Message Classes
