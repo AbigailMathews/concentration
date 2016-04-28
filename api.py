@@ -9,6 +9,7 @@ from google.appengine.ext import ndb
 
 from models import User
 from models import Game, NewGameForm, GameForm
+from models import MiniGameForm, MiniGameForms
 from models import FlipCardForm, CardForm, MakeGuessForm
 from models import StringMessage
 from utils import get_by_urlsafe
@@ -38,6 +39,9 @@ USER_REQUEST = endpoints.ResourceContainer(
         user_name=messages.StringField(1),
         email=messages.StringField(2))
 
+USER_GAME_REQUEST = endpoints.ResourceContainer(
+        user_name=messages.StringField(1))
+
 
 ### ### CONCENTRATION API ### ###
 @endpoints.api( name='concentration',
@@ -66,23 +70,43 @@ class ConcentrationApi(remote.Service):
                 request.user_name))
 
 
-#    @endpoints.method(request_message=USER_GAME_REQUEST,
-#                      response_message=UserGameForm,
-#                      path='user/current',
-#                      name='get_user_games',
-#                      http_method='GET')
-#    def get_user_games(self, request):
-#        """Return a list of all of a User's active games"""
+    @endpoints.method(request_message=USER_GAME_REQUEST,
+                      response_message=MiniGameForms,
+                      path='user/current',
+                      name='get_user_games',
+                      http_method='GET')
+    def get_user_games(self, request):
+        """Return a list of all of a User's active games"""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException('No such user.')
+        else:
+            q = Game.query(Game.user == user.key)
+            games = q.fetch()
+            return MiniGameForms(
+                games=[g.to_mini_form() for g in games]
+            )
+
+
 
     ## GAME METHODS
 
-#    @endpoints.method(request_message=StringMessage,
-#                      response_message=StringMessage,
-#                      path='game/{rulsafe_game_key}/cancel',
-#                      name='cancel_game',
-#                      http_method=POST)
-#    def cancel_game(self, request):
-#        """Cancel and in-progress (but not completed) game"""
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=StringMessage,
+                      path='game/{urlsafe_game_key}/cancel',
+                      name='cancel_game',
+                      http_method='POST')
+    def cancel_game(self, request):
+        """Cancel and in-progress (but not completed) game"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        if not game:
+            raise endpoints.NotFoundException("Can't cancel! Game doesn't exist!")
+        elif game.game_over:
+            raise endpoints.BadRequestException("Can't cancel a completed game!")
+        else:
+            game.delete()
+            return StringMessage(message='Game canceled.')
+
 
     @endpoints.method(request_message=NEW_GAME_REQUEST,
                       response_message=GameForm,
@@ -103,8 +127,8 @@ class ConcentrationApi(remote.Service):
 
 
     @endpoints.method(request_message=GET_GAME_REQUEST, response_message=GameForm,
-            path='game/{urlsafe_game_key}', http_method='GET', name='showGame')
-    def showGame(self, request):
+            path='game/{urlsafe_game_key}', http_method='GET', name='show_game')
+    def show_game(self, request):
         """Return the board state for the specified game"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:
@@ -126,8 +150,8 @@ class ConcentrationApi(remote.Service):
 
 
     @endpoints.method(FLIP_CARD_REQUEST, CardForm,
-            path='game/{urlsafe_game_key}/flip', http_method='POST', name='flipCard')
-    def flipCard(self, request):
+            path='game/{urlsafe_game_key}/flip', http_method='POST', name='flip_card')
+    def flip_card(self, request):
         """Responds to a guessed card by revealing a card's value"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:
@@ -139,8 +163,8 @@ class ConcentrationApi(remote.Service):
             return CardForm(cardValue=result)
 
     @endpoints.method(MAKE_MOVE_REQUEST, GameForm,
-            path='game/{urlsafe_game_key}/move', http_method='POST', name='makeMove')
-    def makeMove(self, request):
+            path='game/{urlsafe_game_key}/move', http_method='POST', name='make_move')
+    def make_move(self, request):
         """Accepts two cards and reveals whether they match"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:

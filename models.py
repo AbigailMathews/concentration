@@ -55,6 +55,14 @@ class Game(ndb.Model):
         form.board = self.board
         return form
 
+    def to_mini_form(self):
+        """Return a MiniGameForm representation of a Game"""
+        form = MiniGameForm()
+        form.urlsafe_key = self.key.urlsafe()
+        form.guesses = self.guesses
+        form.cards = self.cards
+        return form
+
     def end_game(self):
         #self.game_over = True
         #self.put()
@@ -87,6 +95,18 @@ class GameForm(messages.Message):
     user_name = messages.StringField(6)
     cards = messages.IntegerField(7)
     board = messages.StringField(8, repeated=True)
+
+
+class MiniGameForm(messages.Message):
+    """Abbreviated Game Form for reporting, rather than play purposes"""
+    urlsafe_key = messages.StringField(1)
+    guesses = messages.IntegerField(2)
+    cards = messages.IntegerField(3)
+
+
+class MiniGameForms(messages.Message):
+    """Hold a list of abbreviated Game Forms"""
+    games = messages.MessageField(MiniGameForm, 1, repeated=True)
 
 
 class NewGameForm(messages.Message):
