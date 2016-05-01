@@ -1,14 +1,17 @@
+"""Game functions to implement a Concentration (Memory) game using playing cards"""
+
 import pydealer as pd
 
 
 def isGameWon(boardState):
+    """Check if the board still contains unmatched cards"""
     if 'U' in boardState:
         return False
     return True
 
 def constructBoard(numCards=52):
-    """"Create a board out of a shuffleed deck of numCards
-    numCards (default 52): number of cards in the board (even #, 8-52)"""
+    """"Create a board out of a shuffled deck of numCards
+    numCards(default 52): number of cards in the board (even #, 8-52)"""
     deck = pd.Deck()
     ## Split the deck using the initial set of cards if numCards < 52
     if numCards < 52:
@@ -19,9 +22,7 @@ def constructBoard(numCards=52):
     board = []
     for c in deck:
         board.append(pd.card.card_abbrev(c.value, c.suit))
-        #else:
-        #    board.append(pd.card.card_name(c.value, c.suit))
-        #board.append(c)
+
     return board
 
 
@@ -35,6 +36,9 @@ def initialBoardState(numCards=52):
 
 
 def splitDeck(deck, numCards):
+    """Create a deck that is smaller than the default 52 card deck,
+    while making sure that there are an even number of cards, and each
+    card has a real match."""
     if numCards % 2 != 0:
         numCards += 1
     if numCards < 8:
@@ -44,11 +48,14 @@ def splitDeck(deck, numCards):
 
 
 def turnCard(indexValue, myBoard):
+    """Return the value of a guessed card."""
     cardname = myBoard[indexValue]
     return cardname
 
 
 def compareCards(index1, index2, myBoard, displayBoard):
+    """Compare two guessed cards to see if they match, representing
+    a game turn"""
     card1 = myBoard[index1]
     card2 = myBoard[index2]
     message = "The first card had value {}. ".format(card1)
@@ -63,6 +70,7 @@ def compareCards(index1, index2, myBoard, displayBoard):
 
 
 def playGame():
+    """A command line implementation of Concentration, for testing purposes"""
     print("Welcome to Concentration, your memory game!")
     number_of_cards = input("How many cards would you like to play with? ")
     true_board = constructBoard(number_of_cards)

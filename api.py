@@ -7,10 +7,11 @@ from protorpc import remote, messages, message_types
 from google.appengine.api import memcache, taskqueue
 from google.appengine.ext import ndb
 
-from models import User, UserForm
+from models import User, UserForm, UserForms
 from models import Game, NewGameForm, GameForm
 from models import MiniGameForm, MiniGameForms
 from models import FlipCardForm, CardForm, MakeGuessForm
+from models import Score, ScoreForm, ScoreForms
 from models import StringMessage
 from utils import get_by_urlsafe
 
@@ -140,6 +141,8 @@ class ConcentrationApi(remote.Service):
             game = Game.new_game(user.key, request.cards)
         except:
             raise endpoints.BadRequestException('Request Failed')
+        user.total_games += 1
+        user.put()
         return game.to_form('Let the Guessing Begin!')
 
 
@@ -173,11 +176,14 @@ class ConcentrationApi(remote.Service):
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:
             raise endpoints.NotFoundException('No game found!')
+        elif game.status != 'In Progress':
+            raise endpoints.BadRequestException('Not an active game, guesses no longer allowed')
         else:
             board = game.board
             guessedCard = getattr(request, 'flippedCard')
             result = gm.turnCard(guessedCard, board)
             return CardForm(cardValue=result)
+
 
     @endpoints.method(MAKE_MOVE_REQUEST, GameForm,
             path='game/{urlsafe_game_key}/move', http_method='POST', name='make_move')
@@ -186,6 +192,8 @@ class ConcentrationApi(remote.Service):
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if not game:
             raise endpoints.NotFoundException('No game found!')
+        elif game.status != 'In Progress':
+            raise endpoints.BadRequestException('Not an active game, moves no longer allowed')
         else:
             board = game.board
             displayBoard = game.boardState
@@ -198,47 +206,58 @@ class ConcentrationApi(remote.Service):
                 message, resultBoard = gm.compareCards(card1, card2, board, displayBoard)
                 game.guesses += 1
                 game.boardState = resultBoard
+                # Check to see if the game has now been won
+                if gm.isGameWon(game.boardState):
+                    message += ' Congratulations -- You win! All cards matched!'
+                    game.status = 'Won'
+                    game.win_game()
                 game.put()
                 return game.to_form(message=message)
 
 
     ## SCORE METHODS
 
-#    @endpoints.method(response_message=ScoreForms,
-#                      path='scores',
-#                      name='get_scores',
-#                      http_method='GET')
-#    def get_scores(self, request):
-#        """Return all scores"""
-#        return ScoreForms(items=[score.to_form() for score in Score.query()])
+    @endpoints.method(request_message=message_types.VoidMessage,
+                      response_message=ScoreForms,
+                      path='scores/all',
+                      name='get_all_scores',
+                      http_method='GET')
+    def get_scores(self, request):
+        """Return scores for all completed games"""
+        return ScoreForms(scores=[score.to_form() for score in Score.query()])
 
 
-#    @endpoints.method(request_message=USER_REQUEST,
-#                      response_message=ScoreForms,
-#                      path='scores/user/{user_name}',
-#                      name='get_user_scores',
-#                      http_method='GET')
-#    def get_user_scores(self, request):
-#        """Returns all of an individual User's scores"""
-#        user = User.query(User.name == request.user_name).get()
-#        if not user:
-#            raise endpoints.NotFoundException(
-#                    'A User with that name does not exist!')
-#        scores = Score.query(Score.user == user.key)
-#        return ScoreForms(items=[score.to_form() for score in scores])
+    @endpoints.method(request_message=USER_INFO_REQUEST,
+                      response_message=ScoreForms,
+                      path='scores/user/{user_name}',
+                      name='get_user_scores',
+                      http_method='GET')
+    def get_user_scores(self, request):
+        """Returns all of an individual User's scores"""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException(
+                    'A User with that name does not exist!')
+        scores = Score.query()
+        return ScoreForms(scores=[score.to_form() for score in scores])
+
+
+    @endpoints.method(request_message=message_types.VoidMessage,
+                      response_message=ScoreForm,
+                      path='scores/high',
+                      name='get_high_scores',
+                      http_method='GET')
+    def get_high_scores(self, request):
+        """Generate a list of high scores"""
+        q = Score.query()
+        q.order(Score.score)
+        q.fetch(10)
+
+        return ScoreForms(scores=[score.to_form() for score in q])
 
 
 #    @endpoints.method(request_message=message_types.VoidMessage,
-#                      response_message=ScoreForm,
-#                      path='scores/high_scores',
-#                      name='get_high_scores',
-#                      http_method='GET')
-#    def cancel_game(self, request):
-#        """Generate a list of high scores"""
-
-
-#    @endpoints.method(request_message=message_types.VoidMessage,
-#                      response_message=UserRankForm,
+#                      response_message=UserForms,
 #                      path='users/rankings',
 #                      name='get_user_rankings',
 #                      http_method='GET')
