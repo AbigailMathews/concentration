@@ -8,22 +8,22 @@ from google.appengine.ext import ndb
 
 import game as gm
 
-### User Related Classes and Messages
+### User Related Classes and Methods
 
 class User(ndb.Model):
     """User profile"""
     name = ndb.StringProperty(required=True)
     email = ndb.StringProperty()
-    total_games = ndb.FloatProperty(default=.1)
-    total_score = ndb.FloatProperty(default=.1)
+    total_games = ndb.IntegerProperty(default = 0)
+    total_score = ndb.IntegerProperty(default = 0)
     avg_score = ndb.FloatProperty(default = 0)
 
     def to_form(self):
         form = UserForm()
         form.name = self.name
         form.urlsafe_key = self.key.urlsafe()
-        form.total_games = self.total_games - .1
-        form.total_score = self.total_score - .1
+        form.total_games = self.total_games
+        form.total_score = self.total_score
         form.avg_score = round(self.avg_score)
         return form
 
@@ -31,7 +31,7 @@ class User(ndb.Model):
         avg_score = self.total_score / self.total_games
         return avg_score
 
-### Game Related Classes and Messages
+### Game Related Class and Methods
 
 class Game(ndb.Model):
     """Game object"""
@@ -81,16 +81,23 @@ class Game(ndb.Model):
 
     def win_game(self):
         # Add the game to the score 'board'
-        total_score = round((self.cards ** 4) / self.guesses)
+        total_score = int(round((self.cards ** 4) / self.guesses))
         score = Score(user=self.user, date=date.today(), cards=self.cards, 
                       guesses=self.guesses, score=total_score)
         score.put()
         user = self.user.get()
-        user.total_score += total_score
+        # Add the current score to the user's total score, but handle error
+        # if user's current score is 0
+        try:
+            user.total_score += total_score
+        except TypeError:
+            user.total_score = total_score
         user.put()
         user.avg_score = user.calc_score()
         user.put()
 
+
+### Score Class and Methods
 
 class Score(ndb.Model):
     """Score object"""
@@ -101,12 +108,14 @@ class Score(ndb.Model):
     score = ndb.FloatProperty(required=True)
 
     def to_form(self):
-        return ScoreForm(user_name=self.user.get().name,
-                         date=str(self.date), 
+        return ScoreForm(user_name=self.user.get().name, 
                          cards=self.cards,
-                         guesses=self.guesses,
+                         date=str(self.date), 
+                         guesses=self.guesses, 
                          score=self.score)
 
+
+### Game Forms -- Display
 
 class GameForm(messages.Message):
     """GameForm for outbound game state information"""
@@ -139,7 +148,7 @@ class NewGameForm(messages.Message):
     cards = messages.IntegerField(2, default=52)
 
 
-## Guess Message Classes
+### Gameplay Forms
 
 class FlipCardForm(messages.Message):
     """Form to allow players to guess a card by supplying its index"""
@@ -157,7 +166,7 @@ class MakeGuessForm(messages.Message):
     card2 = messages.IntegerField(2, required=True)
 
 
-## Score Message Classes
+### Score Forms
 
 class ScoreForm(messages.Message):
     """ScoreForm for outbound Score information"""
@@ -179,8 +188,8 @@ class UserForm(messages.Message):
     """User detail form"""
     name = messages.StringField(1)
     urlsafe_key = messages.StringField(2)
-    total_games = messages.FloatField(3)
-    total_score = messages.FloatField(4)
+    total_games = messages.IntegerField(3)
+    total_score = messages.IntegerField(4)
     avg_score = messages.FloatField(5)
 
 

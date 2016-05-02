@@ -141,7 +141,12 @@ class ConcentrationApi(remote.Service):
             game = Game.new_game(user.key, request.cards)
         except:
             raise endpoints.BadRequestException('Request Failed')
-        user.total_games += 1
+        # Increment total games by 1, but if it's initially zero, deal
+        # with the error that gets thrown
+        try:
+            user.total_games += 1
+        except TypeError:
+            user.total_games = 1
         user.put()
         return game.to_form('Let the Guessing Begin!')
 
@@ -219,12 +224,12 @@ class ConcentrationApi(remote.Service):
 
     @endpoints.method(request_message=message_types.VoidMessage,
                       response_message=ScoreForms,
-                      path='scores/all',
-                      name='get_all_scores',
+                      path='scores',
+                      name='get_scores',
                       http_method='GET')
     def get_scores(self, request):
-        """Return scores for all completed games"""
-        return ScoreForms(scores=[score.to_form() for score in Score.query()])
+        """Return all scores"""
+        return ScoreForms(items=[score.to_form() for score in Score.query()])
 
 
     @endpoints.method(request_message=USER_INFO_REQUEST,
@@ -238,31 +243,32 @@ class ConcentrationApi(remote.Service):
         if not user:
             raise endpoints.NotFoundException(
                     'A User with that name does not exist!')
-        scores = Score.query()
-        return ScoreForms(scores=[score.to_form() for score in scores])
+        scores = Score.query(Score.user == user.key)
+        return ScoreForms(items=[score.to_form() for score in scores])
 
 
     @endpoints.method(request_message=message_types.VoidMessage,
-                      response_message=ScoreForm,
+                      response_message=ScoreForms,
                       path='scores/high',
                       name='get_high_scores',
                       http_method='GET')
     def get_high_scores(self, request):
         """Generate a list of high scores"""
-        q = Score.query()
-        q.order(Score.score)
+        q = Score.query().order(-Score.score)
         q.fetch(10)
+        return ScoreForms(items=[score.to_form() for score in q])
 
-        return ScoreForms(scores=[score.to_form() for score in q])
 
-
-#    @endpoints.method(request_message=message_types.VoidMessage,
-#                      response_message=UserForms,
-#                      path='users/rankings',
-#                      name='get_user_rankings',
-#                      http_method='GET')
-#    def get_user_rankings(self, request):
-#        """Return a player's performance statistics"""
+    @endpoints.method(request_message=message_types.VoidMessage,
+                      response_message=UserForms,
+                      path='users/rankings',
+                      name='get_user_rankings',
+                      http_method='GET')
+    def get_user_rankings(self, request):
+        """Return the players, ranked by average score"""
+        q = User.query().order(-User.avg_score)
+        q.fetch()
+        return UserForms(users=[user.to_form() for user in q])
 
 
 api = endpoints.api_server([ConcentrationApi])
