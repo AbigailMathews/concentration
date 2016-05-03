@@ -41,6 +41,8 @@ class Game(ndb.Model):
     cards = ndb.IntegerProperty(required=True, default=52)
     status = ndb.StringProperty(required=True, default='In Progress')
     user = ndb.KeyProperty(required=True, kind='User')
+    history = ndb.PickleProperty(repeated=True)
+    score = ndb.FloatProperty()
 
     @classmethod
     def new_game(self, user, cards=52):
@@ -79,9 +81,22 @@ class Game(ndb.Model):
         form.status = self.status
         return form
 
+    def to_history_form(self):
+        """Returns a game history form after a game has been won"""
+        form = HistoryForm()
+        form.urlsafe_key = self.key.urlsafe()
+        form.cards = self.cards
+        form.guesses = self.guesses
+        form.board = self.board
+        #form.history = self.history
+        form.score = self.score
+        return form
+
     def win_game(self):
         # Add the game to the score 'board'
         total_score = int(round((self.cards ** 4) / self.guesses))
+        self.score = total_score
+        self.put()
         score = Score(user=self.user, date=date.today(), cards=self.cards, 
                       guesses=self.guesses, score=total_score)
         score.put()
@@ -115,6 +130,21 @@ class Score(ndb.Model):
                          score=self.score)
 
 
+### Move Class
+
+class Move(ndb.Model):
+    """Move object"""
+    card1 = ndb.IntegerProperty(required=True)
+    card2 = ndb.IntegerProperty(required=True)
+
+
+### Move Form
+
+class MoveForm(messages.Message):
+    card1 = messages.IntegerField(1)
+    card2 = messages.IntegerField(2)
+
+
 ### Game Forms -- Display
 
 class GameForm(messages.Message):
@@ -135,6 +165,16 @@ class MiniGameForm(messages.Message):
     guesses = messages.IntegerField(2)
     cards = messages.IntegerField(3)
     status = messages.StringField(4)
+
+
+class HistoryForm(messages.Message):
+    """Form to display a game history, as well as score information"""
+    urlsafe_key = messages.StringField(1)
+    cards = messages.IntegerField(2)
+    guesses = messages.IntegerField(3)
+    board = messages.StringField(4, repeated=True)
+    history = messages.MessageField(MoveForm, 1, repeated=True)
+    score = messages.FloatField(7)
 
 
 class MiniGameForms(messages.Message):

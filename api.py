@@ -1,4 +1,11 @@
 
+"""
+CONCENTRATION GAME API
+
+
+"""
+
+# Imports and Setup
 from datetime import datetime
 
 import logging
@@ -9,7 +16,7 @@ from google.appengine.ext import ndb
 
 from models import User, UserForm, UserForms
 from models import Game, NewGameForm, GameForm
-from models import MiniGameForm, MiniGameForms
+from models import MiniGameForm, MiniGameForms, HistoryForm
 from models import FlipCardForm, CardForm, MakeGuessForm
 from models import Score, ScoreForm, ScoreForms
 from models import StringMessage
@@ -22,7 +29,7 @@ API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 # Game Logic
 import game as gm
 
-
+# Various Request Containers
 NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
 
 GET_GAME_REQUEST = endpoints.ResourceContainer(
@@ -62,9 +69,11 @@ class ConcentrationApi(remote.Service):
                       http_method='POST')
     def create_user(self, request):
         """Create a User. Requires a unique username"""
+        # Check that the username is not in use
         if User.query(User.name == request.user_name).get():
             raise endpoints.ConflictException(
                     'A User with that name already exists!')
+        # Create a new user, send a confirmation message
         user = User(name=request.user_name, email=request.email)
         user.put()
         return StringMessage(message='User {} created!'.format(
@@ -79,9 +88,11 @@ class ConcentrationApi(remote.Service):
     def user_info(self, request):
         """Get stats about a user"""
         user = User.query(User.name == request.user_name).get()
+        # Check that user exists
         if not user:
             raise endpoints.NotFoundException('No such user.')
         else:
+            # Return a summary form with user information
             return user.to_form()
 
 
@@ -93,11 +104,14 @@ class ConcentrationApi(remote.Service):
     def get_user_games(self, request):
         """Return a list of all of a User's active games"""
         user = User.query(User.name == request.user_name).get()
+        # Check that user exists
         if not user:
             raise endpoints.NotFoundException('No such user.')
         else:
+            # Fetch all games
             q = Game.query(Game.user == user.key)
             games = q.fetch()
+            # Return a set of simplified game info forms
             return MiniGameForms(
                 games=[g.to_mini_form() for g in games]
             )
@@ -114,6 +128,7 @@ class ConcentrationApi(remote.Service):
     def cancel_game(self, request):
         """Cancel and in-progress (but not completed) game"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        # Make sure we can cancel the specified game
         if not game:
             raise endpoints.NotFoundException("Can't cancel! Game doesn't exist!")
         elif game.status == 'Won':
@@ -121,6 +136,7 @@ class ConcentrationApi(remote.Service):
         elif game.status == 'Canceled':
             raise endpoints.BadRequestException("You've already cancelled that game.")
         else:
+            # Cancel the game and return a confirmation
             game.status = 'Canceled'
             game.put()
             return StringMessage(message='Game canceled.')
@@ -134,10 +150,12 @@ class ConcentrationApi(remote.Service):
     def new_game(self, request):
         """Creates new game"""
         user = User.query(User.name == request.user_name).get()
+        # Make sure user exists
         if not user:
             raise endpoints.NotFoundException(
                     'A User with that name does not exist!')
         try:
+            # Create the new Game
             game = Game.new_game(user.key, request.cards)
         except:
             raise endpoints.BadRequestException('Request Failed')
@@ -148,37 +166,53 @@ class ConcentrationApi(remote.Service):
         except TypeError:
             user.total_games = 1
         user.put()
+        # Send the new game back to the user, ready to play
         return game.to_form('Let the Guessing Begin!')
 
 
-    @endpoints.method(request_message=GET_GAME_REQUEST, response_message=GameForm,
-            path='game/{urlsafe_game_key}', http_method='GET', name='show_game')
+    @endpoints.method(request_message=GET_GAME_REQUEST, 
+                      response_message=GameForm,
+                      path='game/{urlsafe_game_key}', 
+                      http_method='GET', 
+                      name='show_game')
     def show_game(self, request):
         """Return the board state for the specified game"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        # Check that the game exists
         if not game:
             raise endpoints.NotFoundException('No game found!')
         else:
+            # Return the game information, prompting user to make a move
             return game.to_form('Make your move!')
 
 
-#    @endpoints.method(request_message=message_types.VoidMessage,
-#                      response_message=GameHistoryForm,
-#                      path='game/{urlsafe_game_key}/history',
-#                      name='get_game_history',
-#                      http_method='GET')
-#    def get_game_history(self, request):
-#        """Show the history of moves for a game"""
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=HistoryForm,
+                      path='game/{urlsafe_game_key}/history',
+                      name='get_game_history',
+                      http_method='GET')
+    def get_game_history(self, request):
+        """Show the history of moves for a game"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        # Check that the game exists
+        if not game:
+            raise endpoints.NotFoundException('No such game!')
+        else:
+            # Return a game summary and history of moves
+            return game.to_history_form()
 
 
     ## GAME METHODS -- CARD ACTIONS
 
-
-    @endpoints.method(FLIP_CARD_REQUEST, CardForm,
-            path='game/{urlsafe_game_key}/flip', http_method='POST', name='flip_card')
+    @endpoints.method(request_message=FLIP_CARD_REQUEST, 
+                      response_message=CardForm,
+                      path='game/{urlsafe_game_key}/flip', 
+                      http_method='POST', 
+                      name='flip_card')
     def flip_card(self, request):
         """Responds to a guessed card by revealing a card's value"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        # Check that the game exists
         if not game:
             raise endpoints.NotFoundException('No game found!')
         elif game.status != 'In Progress':
@@ -211,6 +245,8 @@ class ConcentrationApi(remote.Service):
                 message, resultBoard = gm.compareCards(card1, card2, board, displayBoard)
                 game.guesses += 1
                 game.boardState = resultBoard
+                # Append the current move to the game history
+                game.history.append(Move(card1, card2))
                 # Check to see if the game has now been won
                 if gm.isGameWon(game.boardState):
                     message += ' Congratulations -- You win! All cards matched!'
