@@ -77,7 +77,7 @@ Games can be played by numerous users simulataneously. Additionally, a user may 
 	- returns: UserForm, containing name, urlsafe_key, total_games, total_score, avg_score
 
 
-- **get_user_games**
+- **get_all_games**
 	- description: Return a list of all of a User's games
 	- path: 'user/all'
 	- method: GET
@@ -85,7 +85,7 @@ Games can be played by numerous users simulataneously. Additionally, a user may 
 	- returns: MiniGameForms, containing urlsafe_key, guesses, cards, status
 
 
-- **get_current_games**
+- **get_user_games**
 	- description: Returns a list of a User's active (in-progress) games
 	- path: 'user/current'
 	- method: GET
