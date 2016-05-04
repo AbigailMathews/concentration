@@ -1,5 +1,7 @@
-"""Game functions to implement a Concentration (Memory) game using playing cards"""
+"""game.py -- Gameplay logic to implement a Concentration (Memory) game 
+using standard playing cards"""
 
+import random
 import pydealer as pd
 
 
@@ -8,6 +10,7 @@ def isGameWon(boardState):
     if 'U' in boardState:
         return False
     return True
+
 
 def constructBoard(numCards=52):
     """"Create a board out of a shuffled deck of numCards
@@ -67,6 +70,17 @@ def compareCards(index1, index2, myBoard, displayBoard):
     else:
         message += "Sorry, no match this time. Guess again."
     return message, displayBoard
+
+
+def giveHint(indexValue, myBoard):
+    """Return a random matching card given the index of a card
+    and a game board"""
+    validMatches = []
+    card = myBoard[indexValue]
+    for c in myBoard:
+        if (card[0] == c[0]) and (myBoard.index(c) != indexValue):
+            validMatches.append(myBoard.index(c))
+    return random.choice(validMatches)
 
 
 def playGame():

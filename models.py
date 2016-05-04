@@ -1,10 +1,20 @@
+"""models.py - Contains class definitions for Datastore entities
+used by the Concentration Game API. Definitions for User, Game, and
+Score classes, with associated methods. Additionally, contains 
+definitions for Forms used in transmitting messages to users."""
+
+### Imports
+
 import random
+import pickle
 from datetime import date
 
 import httplib
 import endpoints
 from protorpc import messages
 from google.appengine.ext import ndb
+
+### Import game logic
 
 import game as gm
 
@@ -19,6 +29,7 @@ class User(ndb.Model):
     avg_score = ndb.FloatProperty(default = 0)
 
     def to_form(self):
+        """Returns a UserForm representation of a User"""
         form = UserForm()
         form.name = self.name
         form.urlsafe_key = self.key.urlsafe()
@@ -28,6 +39,8 @@ class User(ndb.Model):
         return form
 
     def calc_score(self):
+        """Calculate the player's average score -- to be 
+        called whenever a new game is won"""
         avg_score = self.total_score / self.total_games
         return avg_score
 
@@ -88,11 +101,12 @@ class Game(ndb.Model):
         form.cards = self.cards
         form.guesses = self.guesses
         form.board = self.board
-        #form.history = self.history
         form.score = self.score
+        form.history = [h for h in self.history]
         return form
 
     def win_game(self):
+        """Updates score and user information once game is won"""
         # Add the game to the score 'board'
         total_score = int(round((self.cards ** 4) / self.guesses))
         self.score = total_score
@@ -130,21 +144,6 @@ class Score(ndb.Model):
                          score=self.score)
 
 
-### Move Class
-
-class Move(ndb.Model):
-    """Move object"""
-    card1 = ndb.IntegerProperty(required=True)
-    card2 = ndb.IntegerProperty(required=True)
-
-
-### Move Form
-
-class MoveForm(messages.Message):
-    card1 = messages.IntegerField(1)
-    card2 = messages.IntegerField(2)
-
-
 ### Game Forms -- Display
 
 class GameForm(messages.Message):
@@ -166,15 +165,14 @@ class MiniGameForm(messages.Message):
     cards = messages.IntegerField(3)
     status = messages.StringField(4)
 
-
 class HistoryForm(messages.Message):
     """Form to display a game history, as well as score information"""
     urlsafe_key = messages.StringField(1)
     cards = messages.IntegerField(2)
     guesses = messages.IntegerField(3)
     board = messages.StringField(4, repeated=True)
-    history = messages.MessageField(MoveForm, 1, repeated=True)
-    score = messages.FloatField(7)
+    score = messages.FloatField(5)
+    history = messages.StringField(6, repeated=True)
 
 
 class MiniGameForms(messages.Message):
@@ -192,7 +190,7 @@ class NewGameForm(messages.Message):
 
 class FlipCardForm(messages.Message):
     """Form to allow players to guess a card by supplying its index"""
-    flippedCard = messages.IntegerField(1)
+    queryCard = messages.IntegerField(1, required=True)
 
 
 class CardForm(messages.Message):
@@ -204,6 +202,11 @@ class MakeGuessForm(messages.Message):
     """Used to make a move in an existing game"""
     card1 = messages.IntegerField(1, required=True)
     card2 = messages.IntegerField(2, required=True)
+
+
+class HintForm(messages.Message):
+    """Send the index of a matching card (hint) back to a user"""
+    hint = messages.IntegerField(1, required=True)
 
 
 ### Score Forms
