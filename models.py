@@ -67,8 +67,7 @@ class Game(ndb.Model):
                     guesses=0,
                     cards=cards,
                     status='In Progress',
-                    user=user
-                    )
+                    user=user)
         newGame.put()
         return newGame
 
@@ -82,7 +81,6 @@ class Game(ndb.Model):
         form.status = self.status
         form.message = message
         form.boardState = self.boardState
-        form.board = self.board
         return form
 
     def to_mini_form(self):
@@ -155,7 +153,6 @@ class GameForm(messages.Message):
     boardState = messages.StringField(5, repeated=True)
     user_name = messages.StringField(6)
     cards = messages.IntegerField(7)
-    board = messages.StringField(8, repeated=True)
 
 
 class MiniGameForm(messages.Message):

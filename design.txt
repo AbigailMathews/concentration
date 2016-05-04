@@ -1,5 +1,16 @@
-Additional properties you added to models and why
+Reflections on Design-A-Game Project
 
-trade-offs?
+My implementation of the Concentration API built off of the provided code in the Design-A-Game Guess a number example. However, to successfully build all of the current functionality, a number of additional properties had to be added to the original models, as well as additional class methods. 
 
-struggles?
+The original User class contained only name, and email. In my solution, the User model also contains total_games, total_score, and avg_score properties -- the total_games and total_score are used by the new User method calc_score to generate the avg_score for each user. This avg_score is then used by the get_user_rankings endpoint. Also, a to_form method is included to facilitate form construction for messaging purposes.
+
+The provided Game class has been extended to contain board and boardState information, which are used to hold the values of each card and the status (M for matched/U for unmatched) of each card that has been dealt. Both of these properties are critical to the functioning of the game logic, included in the file game.py. The properties attempts_allowed and attempts_remaining, required by the Guess-A-Number API have been removed, since there are no limits to the number of guesses a user is entitled to in the Concentration game. Instead, the properties cards, containing the number of cards dealt, and guesses, recording the number of guesses that have been made in the game are provided. These properties are used in calculating the value of the Game property score, which is updated when a game is won. The BooleanProperty game_over of the Guess-A-Number API has been changed to a StringProperty, status, which can record multiple game states, currently 'In Progress', 'Won', or 'Canceled'. Further the history property allows us to record a list of the moves made in the game, which is critical for the functionality of the get_game_history endpoint. 
+
+Game now contains several additional methods as well as the supplied to_form, which has been extended to include additional relevant properties:
+	- to_mini_form: populates an abbreviated form with information about game status
+	- to_history_form: populates a form showing all moves played as well as game status information
+	- win_game: calculates the Game.score and changes the Game.status to 'Won', while also updating relevant properties in User and creating a Score instance and saving it to the Datastore
+
+The Score class now contains the properties cards, guesses and score, while omitting the Boolean property won, as the Concentration game does not store scores for incomplete games, and there is no limit to the number of guesses that can be made by a user. Thus, only games that have been won will have scores calculated and reported.
+
+One of the challenges in creating this project was to create sufficient endpoints that anticipated likely implementations on the front-end and also allowed for some creativity for the front-end game designer. At the same time, as Concentration is a relatively simple game, I aimed not to overbuild the API and overwhelm the API's user with spurious endpoints. 
